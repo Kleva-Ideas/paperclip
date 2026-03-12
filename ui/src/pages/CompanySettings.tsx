@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { companiesApi } from "../api/companies";
 import { accessApi } from "../api/access";
+import { healthApi } from "../api/health";
 import { queryKeys } from "../lib/queryKeys";
 import { Button } from "@/components/ui/button";
-import { Settings, Check } from "lucide-react";
+import { Settings, Check, Copy, UserPlus, Link2 } from "lucide-react";
 import { CompanyPatternIcon } from "../components/CompanyPatternIcon";
 import {
   Field,
@@ -42,6 +43,45 @@ export function CompanySettings() {
     setDescription(selectedCompany.description ?? "");
     setBrandColor(selectedCompany.brandColor ?? "");
   }, [selectedCompany]);
+
+  const { data: health } = useQuery({
+    queryKey: queryKeys.health,
+    queryFn: () => healthApi.get(),
+    retry: false,
+  });
+  const isAuthenticatedMode = health?.deploymentMode === "authenticated";
+
+  const [teamInviteLink, setTeamInviteLink] = useState<string | null>(null);
+  const [teamInviteCopied, setTeamInviteCopied] = useState(false);
+  const [teamInviteError, setTeamInviteError] = useState<string | null>(null);
+  const [teamInviteExpiresAt, setTeamInviteExpiresAt] = useState<string | null>(null);
+
+  const teamInviteMutation = useMutation({
+    mutationFn: () =>
+      accessApi.createCompanyInvite(selectedCompanyId!, {
+        allowedJoinTypes: "human"
+      }),
+    onSuccess: (invite) => {
+      setTeamInviteError(null);
+      const base = window.location.origin.replace(/\/+$/, "");
+      const link = `${base}/invite/${invite.token}`;
+      setTeamInviteLink(link);
+      setTeamInviteExpiresAt(invite.expiresAt);
+      setTeamInviteCopied(false);
+      navigator.clipboard.writeText(link).then(
+        () => {
+          setTeamInviteCopied(true);
+          setTimeout(() => setTeamInviteCopied(false), 2000);
+        },
+        () => {}
+      );
+    },
+    onError: (err) => {
+      setTeamInviteError(
+        err instanceof Error ? err.message : "Failed to create invite"
+      );
+    }
+  });
 
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSnippet, setInviteSnippet] = useState<string | null>(null);
@@ -133,6 +173,10 @@ export function CompanySettings() {
     setInviteSnippet(null);
     setSnippetCopied(false);
     setSnippetCopyDelightId(0);
+    setTeamInviteLink(null);
+    setTeamInviteCopied(false);
+    setTeamInviteError(null);
+    setTeamInviteExpiresAt(null);
   }, [selectedCompanyId]);
   const archiveMutation = useMutation({
     mutationFn: ({
@@ -307,10 +351,84 @@ export function CompanySettings() {
         </div>
       </div>
 
+      {/* Team Members */}
+      {isAuthenticatedMode && (
+        <div className="space-y-4">
+          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Team Members
+          </div>
+          <div className="space-y-3 rounded-md border border-border px-4 py-4">
+            <div className="flex items-center gap-1.5">
+              <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">
+                Generate a one-time invite link for a team member to sign up and join this company.
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => teamInviteMutation.mutate()}
+                disabled={teamInviteMutation.isPending}
+              >
+                {teamInviteMutation.isPending
+                  ? "Generating..."
+                  : "Generate Invite Link"}
+              </Button>
+            </div>
+            {teamInviteError && (
+              <p className="text-sm text-destructive">{teamInviteError}</p>
+            )}
+            {teamInviteLink && (
+              <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Link2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-xs text-muted-foreground">Invite link (expires in 10 minutes)</span>
+                  {teamInviteCopied && (
+                    <span className="flex items-center gap-1 text-xs text-green-600 animate-pulse ml-auto">
+                      <Check className="h-3 w-3" />
+                      Copied
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    className="flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs outline-none"
+                    value={teamInviteLink}
+                    readOnly
+                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(teamInviteLink);
+                        setTeamInviteCopied(true);
+                        setTimeout(() => setTeamInviteCopied(false), 2000);
+                      } catch {}
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                {teamInviteExpiresAt && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Expires: {new Date(teamInviteExpiresAt).toLocaleString()}
+                  </p>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  Share this link with your team member. They will need to create an account and the join request will need board approval.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Invites */}
       <div className="space-y-4">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Invites
+          Agent Invites
         </div>
         <div className="space-y-3 rounded-md border border-border px-4 py-4">
           <div className="flex items-center gap-1.5">

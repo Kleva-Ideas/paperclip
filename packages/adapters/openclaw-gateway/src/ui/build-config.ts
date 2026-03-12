@@ -20,6 +20,9 @@ export function buildOpenClawGatewayConfig(v: CreateConfigValues): Record<string
   ac.sessionKeyStrategy = "issue";
   ac.role = "operator";
   ac.scopes = ["operator.admin"];
+  if (v.headers && typeof v.headers === "object" && Object.keys(v.headers as object).length > 0) {
+    ac.headers = v.headers;
+  }
   const payloadTemplate = parseJsonObject(v.payloadTemplateJson ?? "");
   if (payloadTemplate) ac.payloadTemplate = payloadTemplate;
   const runtimeServices = parseJsonObject(v.runtimeServicesJson ?? "");

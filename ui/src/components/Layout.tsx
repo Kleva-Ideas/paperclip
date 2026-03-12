@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Moon, Sun } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { BookOpen, LogOut, Moon, Sun, User } from "lucide-react";
 import { Outlet, useLocation, useNavigate, useParams } from "@/lib/router";
 import { CompanyRail } from "./CompanyRail";
 import { Sidebar } from "./Sidebar";
@@ -22,6 +22,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useCompanyPageMemory } from "../hooks/useCompanyPageMemory";
 import { healthApi } from "../api/health";
+import { authApi } from "../api/auth";
 import { queryKeys } from "../lib/queryKeys";
 import { cn } from "../lib/utils";
 import { NotFoundPage } from "../pages/NotFound";
@@ -42,10 +43,35 @@ export function Layout() {
   const { companyPrefix } = useParams<{ companyPrefix: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const onboardingTriggered = useRef(false);
   const lastMainScrollTop = useRef(0);
   const [mobileNavVisible, setMobileNavVisible] = useState(true);
   const nextTheme = theme === "dark" ? "light" : "dark";
+
+  const { data: health } = useQuery({
+    queryKey: queryKeys.health,
+    queryFn: () => healthApi.get(),
+    retry: false,
+  });
+  const isAuthenticatedMode = health?.deploymentMode === "authenticated";
+  const { data: session } = useQuery({
+    queryKey: queryKeys.auth.session,
+    queryFn: () => authApi.getSession(),
+    enabled: isAuthenticatedMode,
+    retry: false,
+  });
+  const sessionUserName = session?.user?.name ?? session?.user?.email ?? null;
+
+  const handleSignOut = useCallback(async () => {
+    try {
+      await authApi.signOut();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
+      navigate("/auth", { replace: true });
+    } catch {
+      navigate("/auth", { replace: true });
+    }
+  }, [queryClient, navigate]);
   const matchedCompany = useMemo(() => {
     if (!companyPrefix) return null;
     const requestedPrefix = companyPrefix.toUpperCase();
@@ -53,11 +79,6 @@ export function Layout() {
   }, [companies, companyPrefix]);
   const hasUnknownCompanyPrefix =
     Boolean(companyPrefix) && !companiesLoading && companies.length > 0 && !matchedCompany;
-  const { data: health } = useQuery({
-    queryKey: queryKeys.health,
-    queryFn: () => healthApi.get(),
-    retry: false,
-  });
 
   useEffect(() => {
     if (companiesLoading || onboardingTriggered.current) return;
@@ -255,7 +276,24 @@ export function Layout() {
             <CompanyRail />
             <Sidebar />
           </div>
-          <div className="border-t border-r border-border px-3 py-2 bg-background">
+          <div className="border-t border-r border-border px-3 py-2 bg-background space-y-1">
+            {isAuthenticatedMode && sessionUserName && (
+              <div className="flex items-center gap-2 px-2 py-1">
+                <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-xs text-muted-foreground truncate flex-1">{sessionUserName}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-muted-foreground shrink-0"
+                  onClick={handleSignOut}
+                  aria-label="Sign out"
+                  title="Sign out"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
             <div className="flex items-center gap-1">
               <SidebarNavItem
                 to="/docs"
@@ -290,7 +328,24 @@ export function Layout() {
               <Sidebar />
             </div>
           </div>
-          <div className="border-t border-r border-border px-3 py-2">
+          <div className="border-t border-r border-border px-3 py-2 space-y-1">
+            {isAuthenticatedMode && sessionUserName && (
+              <div className="flex items-center gap-2 px-2 py-1">
+                <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-xs text-muted-foreground truncate flex-1">{sessionUserName}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-muted-foreground shrink-0"
+                  onClick={handleSignOut}
+                  aria-label="Sign out"
+                  title="Sign out"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
             <div className="flex items-center gap-1">
               <SidebarNavItem
                 to="/docs"

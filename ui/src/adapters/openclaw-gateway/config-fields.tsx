@@ -79,6 +79,19 @@ export function OpenClawGatewayConfigFields({
 
   const commitGatewayToken = (rawValue: string) => {
     const nextValue = rawValue.trim();
+    if (isCreate && set) {
+      const current = values?.headers ?? {};
+      const nextHeaders: Record<string, unknown> = { ...current };
+      if (nextValue) {
+        nextHeaders["x-openclaw-token"] = nextValue;
+        delete nextHeaders["x-openclaw-auth"];
+      } else {
+        delete nextHeaders["x-openclaw-token"];
+        delete nextHeaders["x-openclaw-auth"];
+      }
+      set({ headers: Object.keys(nextHeaders).length > 0 ? nextHeaders : undefined });
+      return;
+    }
     const nextHeaders: Record<string, unknown> = { ...effectiveHeaders };
     if (nextValue) {
       nextHeaders["x-openclaw-token"] = nextValue;
@@ -89,6 +102,12 @@ export function OpenClawGatewayConfigFields({
     }
     mark("adapterConfig", "headers", Object.keys(nextHeaders).length > 0 ? nextHeaders : undefined);
   };
+
+  const createTokenValue = isCreate
+    ? (typeof (values?.headers as Record<string, unknown> | undefined)?.["x-openclaw-token"] === "string"
+        ? String((values?.headers as Record<string, unknown>)["x-openclaw-token"])
+        : "")
+    : effectiveGatewayToken;
 
   const sessionStrategy = eff(
     "adapterConfig",
@@ -112,9 +131,16 @@ export function OpenClawGatewayConfigFields({
           }
           immediate
           className={inputClass}
-          placeholder="ws://127.0.0.1:18789"
+          placeholder="ws://10.108.0.x:18789"
         />
       </Field>
+
+      <SecretField
+        label="Gateway auth token (x-openclaw-token)"
+        value={isCreate ? createTokenValue : effectiveGatewayToken}
+        onCommit={commitGatewayToken}
+        placeholder="Token from ~/.openclaw/openclaw.json"
+      />
 
       <PayloadTemplateJsonField
         isCreate={isCreate}
@@ -146,7 +172,7 @@ export function OpenClawGatewayConfigFields({
               onCommit={(v) => mark("adapterConfig", "paperclipApiUrl", v || undefined)}
               immediate
               className={inputClass}
-              placeholder="https://paperclip.example"
+              placeholder="http://10.108.0.x:3100"
             />
           </Field>
 
@@ -173,13 +199,6 @@ export function OpenClawGatewayConfigFields({
               />
             </Field>
           )}
-
-          <SecretField
-            label="Gateway auth token (x-openclaw-token)"
-            value={effectiveGatewayToken}
-            onCommit={commitGatewayToken}
-            placeholder="OpenClaw gateway token"
-          />
 
           <Field label="Role">
             <DraftInput

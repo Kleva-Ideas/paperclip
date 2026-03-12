@@ -15,6 +15,7 @@ import {
   Bot,
   Code,
   Gem,
+  Globe,
   MousePointer2,
   Sparkles,
   Terminal,
@@ -31,7 +32,7 @@ type AdvancedAdapterType =
   | "cursor"
   | "openclaw_gateway";
 
-const ADVANCED_ADAPTER_OPTIONS: Array<{
+const LOCAL_ADAPTER_OPTIONS: Array<{
   value: AdvancedAdapterType;
   label: string;
   desc: string;
@@ -76,19 +77,15 @@ const ADVANCED_ADAPTER_OPTIONS: Array<{
     icon: MousePointer2,
     desc: "Local Cursor agent",
   },
-  {
-    value: "openclaw_gateway",
-    label: "OpenClaw Gateway",
-    icon: Bot,
-    desc: "Invoke OpenClaw via gateway protocol",
-  },
 ];
+
+type DialogView = "main" | "local_adapters";
 
 export function NewAgentDialog() {
   const { newAgentOpen, closeNewAgent, openNewIssue } = useDialog();
   const { selectedCompanyId } = useCompany();
   const navigate = useNavigate();
-  const [showAdvancedCards, setShowAdvancedCards] = useState(false);
+  const [view, setView] = useState<DialogView>("main");
 
   const { data: agents } = useQuery({
     queryKey: queryKeys.agents.list(selectedCompanyId!),
@@ -107,13 +104,9 @@ export function NewAgentDialog() {
     });
   }
 
-  function handleAdvancedConfig() {
-    setShowAdvancedCards(true);
-  }
-
-  function handleAdvancedAdapterPick(adapterType: AdvancedAdapterType) {
+  function handleAdapterPick(adapterType: AdvancedAdapterType) {
     closeNewAgent();
-    setShowAdvancedCards(false);
+    setView("main");
     navigate(`/agents/new?adapterType=${encodeURIComponent(adapterType)}`);
   }
 
@@ -122,7 +115,7 @@ export function NewAgentDialog() {
       open={newAgentOpen}
       onOpenChange={(open) => {
         if (!open) {
-          setShowAdvancedCards(false);
+          setView("main");
           closeNewAgent();
         }
       }}
@@ -139,7 +132,7 @@ export function NewAgentDialog() {
             size="icon-xs"
             className="text-muted-foreground"
             onClick={() => {
-              setShowAdvancedCards(false);
+              setView("main");
               closeNewAgent();
             }}
           >
@@ -147,33 +140,55 @@ export function NewAgentDialog() {
           </Button>
         </div>
 
-        <div className="p-6 space-y-6">
-          {!showAdvancedCards ? (
+        <div className="p-6 space-y-5">
+          {view === "main" ? (
             <>
-              {/* Recommendation */}
-              <div className="text-center space-y-3">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent">
-                  <Sparkles className="h-6 w-6 text-foreground" />
+              {/* OpenClaw Gateway — primary option */}
+              <button
+                className="w-full flex items-start gap-3 rounded-lg border border-border p-4 text-left transition-colors hover:bg-accent/50 hover:border-foreground/20"
+                onClick={() => handleAdapterPick("openclaw_gateway")}
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent">
+                  <Globe className="h-5 w-5 text-foreground" />
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  We recommend letting your CEO handle agent setup — they know the
-                  org structure and can configure reporting, permissions, and
-                  adapters.
-                </p>
-              </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">OpenClaw Gateway</span>
+                    <span className="bg-primary/10 text-primary text-[9px] font-semibold px-1.5 py-0.5 rounded-full leading-none">
+                      Remote
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Connect a remote OpenClaw bot via WebSocket gateway. Use VPC addresses (10.108.0.x) for local network bots.
+                  </p>
+                </div>
+              </button>
 
-              <Button className="w-full" size="lg" onClick={handleAskCeo}>
-                <Bot className="h-4 w-4 mr-2" />
-                Ask the CEO to create a new agent
-              </Button>
+              {/* Ask CEO */}
+              {ceoAgent && (
+                <button
+                  className="w-full flex items-start gap-3 rounded-lg border border-border p-4 text-left transition-colors hover:bg-accent/50"
+                  onClick={handleAskCeo}
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent">
+                    <Bot className="h-5 w-5 text-foreground" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium">Ask CEO to create an agent</span>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Let your CEO handle setup with the right reporting structure and permissions.
+                    </p>
+                  </div>
+                </button>
+              )}
 
-              {/* Advanced link */}
+              {/* Local adapters link */}
               <div className="text-center">
                 <button
                   className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
-                  onClick={handleAdvancedConfig}
+                  onClick={() => setView("local_adapters")}
                 >
-                  I want advanced configuration myself
+                  Add a local adapter instead (Claude, Codex, Gemini, etc.)
                 </button>
               </div>
             </>
@@ -182,24 +197,24 @@ export function NewAgentDialog() {
               <div className="space-y-2">
                 <button
                   className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  onClick={() => setShowAdvancedCards(false)}
+                  onClick={() => setView("main")}
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
                   Back
                 </button>
                 <p className="text-sm text-muted-foreground">
-                  Choose your adapter type for advanced setup.
+                  Choose a local adapter type. These run CLI tools on this machine.
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                {ADVANCED_ADAPTER_OPTIONS.map((opt) => (
+                {LOCAL_ADAPTER_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
                     className={cn(
                       "flex flex-col items-center gap-1.5 rounded-md border border-border p-3 text-xs transition-colors hover:bg-accent/50 relative"
                     )}
-                    onClick={() => handleAdvancedAdapterPick(opt.value)}
+                    onClick={() => handleAdapterPick(opt.value)}
                   >
                     {opt.recommended && (
                       <span className="absolute -top-1.5 right-1.5 bg-green-500 text-white text-[9px] font-semibold px-1.5 py-0.5 rounded-full leading-none">

@@ -68,10 +68,28 @@ export async function createApp(
       resolveSession: opts.resolveSession,
     }),
   );
-  app.get("/api/auth/get-session", (req, res) => {
+  app.get("/api/auth/get-session", async (req, res) => {
     if (req.actor.type !== "board" || !req.actor.userId) {
       res.status(401).json({ error: "Unauthorized" });
       return;
+    }
+    let email: string | null = null;
+    let name: string | null = null;
+    if (req.actor.source === "local_implicit") {
+      name = "Local Board";
+      email = "local@paperclip.local";
+    } else {
+      const { authUsers } = await import("@paperclipai/db");
+      const { eq } = await import("drizzle-orm");
+      const user = await db
+        .select({ email: authUsers.email, name: authUsers.name })
+        .from(authUsers)
+        .where(eq(authUsers.id, req.actor.userId))
+        .then((rows: Array<{ email: string | null; name: string | null }>) => rows[0] ?? null);
+      if (user) {
+        email = user.email;
+        name = user.name;
+      }
     }
     res.json({
       session: {
@@ -80,8 +98,8 @@ export async function createApp(
       },
       user: {
         id: req.actor.userId,
-        email: null,
-        name: req.actor.source === "local_implicit" ? "Local Board" : null,
+        email,
+        name,
       },
     });
   });
